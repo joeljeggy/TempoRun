@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treadmill Control</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+        <header class="page-header">
+            <h1 class="title">TempoRun</h1>
+            <p class="subtitle">Treadmill control and music sync</p>
+        </header>
+
+        <div class="grid">
+            <!-- Control Panel -->
+            <section class="panel">
+                <h2 class="panel-title">Control Panel</h2>
+                <div class="player-body" style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="startrun()" style="width: 32%; height: 100px;">
+                        <h2>Start</h2>
+                    </button>
+                    <button class="btn btn-secondary" onclick="pauserun()" style="width: 32%; height: 100px;">
+                        <h2>Pause</h2>
+                    </button>
+                    <button class="btn btn-danger" onclick="stoprun()" style="width: 32%; height: 100px;">
+                        <h2>STOP</h2>
+                    </button>
+                </div>
+
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="label">Status</div>
+                        <div class="value" id="status">—</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Time</div>
+                        <div class="value" id="statTime">00:00:00</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Target Speed</div>
+                        <div class="value"><span id="statTarget">0</span> <span class="unit">km/h</span></div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Current Speed</div>
+                        <div class="value"><span id="statSpeed">0</span> <span class="unit">km/h</span></div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Distance</div>
+                        <div class="value"><span id="statDistance">0.00</span> <span class="unit">km</span></div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Calories</div>
+                        <div class="value"><span id="statCalories">0</span> <span class="unit">kcal</span></div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="time-controls" style="display:flex; align-items:center; gap:6px;">
+                        <span class="label" style="margin-right:2px;">speed cutout</span>
+                        <div class="time-controls" style="display:flex; align-items:center; gap:10px;">
+                            <label class="switch" style="margin-right:10px;">
+                                <input type="checkbox" id="dummySwitch">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <button class="btn" id="speedCutoutDec" type="button"
+                            onclick="adjustSpeedCutout(-1)">-1</button>
+                        <input id="speedCutout" type="number" min="1" max="20" value="10" />
+                        <button class="btn" id="speedCutoutInc" type="button" onclick="adjustSpeedCutout(1)">+1</button>
+                    </div>
+                </div>
+
+                <h2 class="panel-title">AI stuff</h2>
+
+                <div class="controls">
+                    <div class="time-controls" style="display:flex; align-items:center; gap:6px;">
+                        <span class="label" style="margin-right:2px;">Workout Time (min)</span>
+                        <button class="btn" type="button" onclick="adjustTime(-1)">-1</button>
+                        <input id="timeMinutes" type="number" min="5" max="60" value="10" />
+                        <button class="btn" type="button" onclick="adjustTime(1)">+1</button>
+                    </div>
+                    <div class="time-controls">
+                        <button class="btn btn-primary" id="genPlaylistBtn" onclick="generatePlaylist()">
+                            <span id="genPlaylistText">🎧 Generate Playlist</span>
+                            <span id="genPlaylistSpinner" style="display:none; margin-left:8px; vertical-align:middle;">
+                                <svg width="18" height="18" viewBox="0 0 50 50" style="display:inline-block;">
+                                    <circle cx="25" cy="25" r="20" fill="none" stroke="#22d3ee" stroke-width="5"
+                                        stroke-linecap="round" stroke-dasharray="31.4 31.4"
+                                        transform="rotate(-90 25 25)">
+                                        <animateTransform attributeName="transform" type="rotate" from="0 25 25"
+                                            to="360 25 25" dur="0.8s" repeatCount="indefinite" />
+                                    </circle>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Music Player -->
+            <section class="panel player">
+                <h2 class="panel-title">Music Player</h2>
+                <div class="player-body">
+                    <div class="cover-wrap">
+                        <button class="btn" onclick="playpause()"
+                            style="border:none; background:none; padding:0; cursor:pointer;">
+                            <img class="cover" id="coverArt" src="" alt="Play">
+                        </button>
+                    </div>
+                    <div class="track-info">
+                        <div class="now">
+                            <div class="eyebrow">Now Playing</div>
+                            <div class="song" id="currentSong">None</div>
+                            <div class="meta">Speed: <span id="currentSpeed">0</span> km/h</div>
+                        </div>
+                        <div class="next">
+                            <div class="eyebrow">Up Next</div>
+                            <div class="song" id="nextSong">None</div>
+                            <div class="meta">Speed: <span id="nextSpeed">0</span> km/h</div>
+                        </div>
+                        <div class="player-controls">
+                            <button class="btn" onclick="prevTrack()">⏮ Prev</button>
+                            <button class="btn" onclick="nextTrack()">Next ⏭</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

@@ -8,7 +8,7 @@ import json
 import time
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS 
 
 load_dotenv()
@@ -21,7 +21,9 @@ lock = threading.Lock()
 stop_thread = False
 esp32_ip = "192.168.20.106" # IP address of the esp32 
 playlist = None
-speed_kmh = None # current speed in km/h
+speed_kmh = 0.0 # current speed in km/h
+target_kmh = 0.0 # target speed in km/h
+calories = 0 # current calories burned    
 threadmill_status = "unknown" # current treadmill status
 duration_s = 0 # current duration in seconds
 distance_km = 0 # current distance in kilometers
@@ -41,6 +43,7 @@ return_value=0 # return value
 # Cover art state (updated only when song changes)
 cover_art_url = ""
 last_song_for_art = None
+workout_time_limit_sec = 1200  # default playlist time limit
 
 # Spotipi setup
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
@@ -67,7 +70,7 @@ class Output(BaseModel):
     Cooldown: list[str]
 
 def generate_and_queue_workout_playlist():
-    global data,playlist,track_ids
+    global data,playlist,track_ids,workout_time_limit_sec
 
     # Gemini API Setup
     client = genai.Client(api_key=Gemini_api_key)
@@ -93,7 +96,7 @@ def generate_and_queue_workout_playlist():
                     "Running songs (BPM 120–150, high energy and danceability),"
                     "Sprinting songs (BPM 150–180+, very high energy preferred),"
                     "Cooldown songs (BPM < 90, low energy and smooth transitions)."
-                  " Total time should be less than 1200 seconds."
+                  f" Total time should be less than {workout_time_limit_sec} seconds."
                   " Return id of each selected songs in each catagory following the response schema."
                   " Don't include songs that are too low in danceability unless they are clearly for cooldown."
                   " Prioritize diversity in BPM and avoid repeating the same artist too many times in each category."],
@@ -131,125 +134,26 @@ def generate_and_queue_workout_playlist():
 
 # ----------- flask routes -----------
 
-HTML_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Treadmill Control</title>
-<style>
-body { font-family: Arial, sans-serif; padding: 20px; }
-.section { margin-bottom: 30px; }
-label { display: block; margin-top: 10px; }
-input[type=range] { width: 200px; }
-</style>
-</head>
-<body>
+@app.route("/generate_playlist", methods=["POST"])
+def generate_playlist():
+    global pending_command,workout_time_limit_sec
+    try:
+        pending_command = "clear_queue"
+        data = request.get_json(silent=True) or {}
+        # Accept time_seconds and clamp to reasonable bounds (5 min to 2 hours)
+        if isinstance(data.get("time_seconds"), (int, float)):
+            ts = int(data["time_seconds"]) if data["time_seconds"] >= 0 else 0
+            ts = max(300, min(ts, 7200))  # 5 minutes to 120 minutes
+            workout_time_limit_sec = ts
+        generate_and_queue_workout_playlist()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-<h1>Treadmill Control Panel</h1>
-
-<div class="section">
-  <h2>Controls</h2>
-  <button onclick="startrun()">Start</button>
-  <button onclick="pauserun()">Pause</button>
-  <button onclick="stoprun()">Stop</button>
-</div>
-
-<div class="section">
-  <h2>Stats</h2>
-  <p>status: <span id="status">False</span></p>
-  <p>Speed: <span id="statSpeed">0</span> km/h</p>
-  <p>Distance: <span id="statDistance">0.0</span> km</p>
-  <p>Time: <span id="statTime">0</span> s</p>
-</div>
-
-<div class="section">
-  <h2>Music</h2>
-  <p>Current: <span id="currentSong">None</span> | Speed: <span id="current Speed">0</span></p>
-  <p>Next: <span id="nextSong">None</span> | Speed: <span id="next Speed">0</span></p>
-    <div style="margin-top:10px;">
-        <img id="coverArt" alt="Cover Art" src="" style="max-width: 200px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2);"/>
-    </div>
-    <div style="margin-top:10px; display:flex; gap:10px;">
-        <button onclick="prevTrack()">⏮️ Prev</button>
-        <button onclick="nextTrack()">⏭️ Next</button>
-    </div>
-</div>
-
-<script>
-const speedSlider = document.getElementById("speed");
-const speedValue = document.getElementById("speedValue");
-
-async function startrun() {
-    try {
-        await fetch("/set_command/start", { method: "GET" });
-    } catch (e) {}
-}
-
-async function pauserun() {
-    try {
-        await fetch("/set_command/pause", { method: "GET" });
-    } catch (e) {}
-}
-
-async function stoprun() {
-    try {
-        await fetch("/set_command/stop", { method: "GET" });
-    } catch (e) {}
-}
-
-async function nextTrack() {
-    try {
-        await fetch("/player/next", { method: "POST" });
-    } catch (e) {}
-}
-
-async function prevTrack() {
-    try {
-        await fetch("/player/previous", { method: "POST" });
-    } catch (e) {}
-}
-
-async function refreshStatus() {
-    const res = await fetch("/status");
-    const data = await res.json();
-    const t = data.treadmill;
-    document.getElementById("status").textContent = t.status;
-    document.getElementById("statSpeed").textContent = t.speed;
-    document.getElementById("statDistance").textContent = t.distance.toFixed(2);
-    document.getElementById("statTime").textContent = t.time;
-
-    const m = data.music;
-    document.getElementById("currentSong").textContent = m.current;
-    document.getElementById("current Speed").textContent = m.current_speed;
-    document.getElementById("nextSong").textContent = m.next;
-    document.getElementById("next Speed").textContent = m.next_speed;
-
-    // Update cover art only when the song changes
-    if (!window.__lastSongDisplayed || window.__lastSongDisplayed !== m.current) {
-        const img = document.getElementById("coverArt");
-        if (m.cover_url) {
-            img.src = m.cover_url;
-            img.style.display = "block";
-        } else {
-            img.src = "";
-            img.style.display = "none";
-        }
-        window.__lastSongDisplayed = m.current;
-    }
-}
-
-setInterval(refreshStatus, 250);
-</script>
-
-</body>
-</html>
-"""
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_PAGE)
+    return render_template("index.html")
 
 @app.route("/status")
 def status():
@@ -261,7 +165,9 @@ def status():
         "status": threadmill_status,
         "speed": speed_kmh,
         "distance": distance_km,
-        "time": f"{hours:02}:{minutes:02}:{secs:02}"
+        "time": f"{hours:02}:{minutes:02}:{secs:02}",
+        "target": target_kmh,
+        "calories": calories
     }
 
     # If the current song changed, fetch current playback once to get cover art
@@ -308,6 +214,18 @@ def player_previous():
         return jsonify({"status": "ok"})
     except spotipy.exceptions.SpotifyException as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+    
+@app.route("/player/playpause", methods=["POST"])
+def player_pp():
+    try:
+        playback = sp.current_playback()
+        if playback and playback.get("is_playing"):
+            sp.pause_playback()
+        else:
+            sp.start_playback()
+        return jsonify({"status": "ok"})
+    except spotipy.exceptions.SpotifyException as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route("/set_command/<command>", methods=["GET"])
 def set_command(command):
@@ -349,20 +267,11 @@ def commands():
 
     return jsonify({"command": command})
 
-    
-'''
-@app.route("/response", methods=["POST"])
-def response():
-    data = request.get_json()
-    print(f"✅ Client Response: {data.get('message')}")
-    return jsonify({"status": "ok"})
-'''
-
 # ----------- ESP32 Command Section -----------
 
 # Thread that fetch the values from esp32
 def get_status(session):
-    global  stop_thread, speed_kmh, threadmill_status, duration_s, distance_km
+    global  stop_thread, speed_kmh, threadmill_status, duration_s, distance_km, target_kmh, calories
     while not stop_thread:
         try:
             response = session.get(f"http://{esp32_ip}/status", timeout=5)
@@ -371,9 +280,11 @@ def get_status(session):
                     status_data = response.json()
                     with lock:
                         speed_kmh = status_data.get("speed_kmh", 0)
+                        target_kmh = status_data.get("target_kmh", 0)
                         threadmill_status = status_data.get("status", "unknown")
                         duration_s = status_data.get("duration_s", 0)
                         distance_km = status_data.get("distance_km", 0)
+                        calories = status_data.get("calories", 0)
                 except json.JSONDecodeError:
                     print("[ESP32 Status] Failed to parse JSON.")
             else:
@@ -488,8 +399,8 @@ def main():
     flask_thread.daemon = True
     flask_thread.start()
 
-    print("🎧 Generating treadmill workout playlist using Gemini + Spotify...")
-    generate_and_queue_workout_playlist()
+    #print("🎧 Generating treadmill workout playlist using Gemini + Spotify...")
+    #generate_and_queue_workout_playlist()
 
     print("\n🔧 Starting ESP32 command interface...")
     start_esp32_interface()
