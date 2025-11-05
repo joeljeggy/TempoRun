@@ -2,7 +2,7 @@
 
 TempoRun is a web application that synchronizes music to a treadmill workout, dynamically adjusting the target speed based on the currently playing song's beats per minute (BPM). It uses the Google Gemini API to generate a workout-optimized Spotify playlist and a Flask server to communicate with both Spotify and a dedicated ESP32 treadmill interface.
 
-## 🌟 Features
+## Features
 
 * **Treadmill Control:** Send `start`, `pause`, and `stop` commands to the ESP32 hardware interface.
 * **Real-time Metrics:** Display current treadmill status, speed, distance, time, target speed, and calories in a web interface.
@@ -11,7 +11,7 @@ TempoRun is a web application that synchronizes music to a treadmill workout, dy
 * **Speed Cutout:** An optional safety feature that, when enabled, halves the calculated BPM (and thus the target speed) if the calculated target speed exceeds a user-defined threshold (default 10 km/h).
 * **Spotify Player Controls:** Basic music player functionality including Play/Pause, Next Track, and Previous Track.
 
-## ⚙️ Setup and Prerequisites
+## Setup and Prerequisites
 
 ### Environment Variables
 
@@ -36,7 +36,7 @@ The application requires the following Spotify scope: `user-modify-playback-stat
 
 * **`songs.json`:** This file must contain a list of tracks with metadata (`id`, `name`, `artists`, `duration_sec`, `bpm`, `energy`, `danceability`) for the Gemini model to analyze and build the playlist.
 
-## 🚀 Running the Application
+## Running the Application
 
 1.  **Dependencies:** Install the required Python packages (e.g., `flask`, `requests`, `spotipy`, `pydantic`, `google-genai`, `python-dotenv`).
 
@@ -46,7 +46,7 @@ The application requires the following Spotify scope: `user-modify-playback-stat
     ```
     The application will start two threads: one for the Flask web server (on `http://0.0.0.0:5000`) and one for the ESP32 command interface.
 
-## 💻 Usage
+## Usage
 
 ### Main Interface (`/`)
 
